@@ -23,6 +23,10 @@ type GameState = {
   finishRun: () => void;
   reset: () => void;
   update: (dt: number) => void;
+  settings: {
+    inputMode: 'touchZones' | 'joystick';
+  };
+  setInputMode: (mode: 'touchZones' | 'joystick') => void;
 };
 
 const defaultCarState = {
@@ -33,7 +37,7 @@ const defaultCarState = {
 
 const initialState: Pick<
   GameState,
-  'runActive' | 'carPosition' | 'carVelocity' | 'angle' | 'lap'
+  'runActive' | 'carPosition' | 'carVelocity' | 'angle' | 'lap' | 'settings'
 > = {
   runActive: false,
   ...defaultCarState,
@@ -43,6 +47,9 @@ const initialState: Pick<
     bestTime: null,
     lapCount: 0,
     distance: 0,
+  },
+  settings: {
+    inputMode: 'touchZones',
   },
 };
 
@@ -93,6 +100,14 @@ export const useGameStore = create<GameState>((set) => ({
       };
     }),
   reset: () => set(() => ({ ...initialState })),
+  setInputMode: (mode) =>
+    set((state) => ({
+      ...state,
+      settings: {
+        ...state.settings,
+        inputMode: mode,
+      },
+    })),
   update: (dt) =>
     set((state) => {
       if (!state.runActive) {
