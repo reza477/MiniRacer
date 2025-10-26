@@ -1,0 +1,48 @@
+{
+  "name": "Default Rectangle Loop",
+  "dimensions": { "width": 800, "height": 600 },
+  "zones": [
+    {
+      "id": "grass-field",
+      "label": "Grass Runoff",
+      "type": "grass",
+      "bounds": { "x": 60, "y": 60, "width": 680, "height": 480 }
+    },
+    {
+      "id": "asphalt-loop",
+      "label": "Asphalt Loop",
+      "type": "asphalt",
+      "bounds": { "x": 140, "y": 140, "width": 520, "height": 320 }
+    },
+    {
+      "id": "barrier-north",
+      "label": "Barrier North",
+      "type": "barrier",
+      "bounds": { "x": 120, "y": 120, "width": 560, "height": 20 }
+    },
+    {
+      "id": "barrier-south",
+      "label": "Barrier South",
+      "type": "barrier",
+      "bounds": { "x": 120, "y": 460, "width": 560, "height": 20 }
+    },
+    {
+      "id": "barrier-west",
+      "label": "Barrier West",
+      "type": "barrier",
+      "bounds": { "x": 120, "y": 140, "width": 20, "height": 320 }
+    },
+    {
+      "id": "barrier-east",
+      "label": "Barrier East",
+      "type": "barrier",
+      "bounds": { "x": 660, "y": 140, "width": 20, "height": 320 }
+    },
+    {
+      "id": "start-line",
+      "label": "Start Line",
+      "type": "startLine",
+      "bounds": { "x": 388, "y": 140, "width": 24, "height": 96 }
+    }
+  ]
+}
