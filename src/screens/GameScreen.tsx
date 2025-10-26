@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import PrimaryButton from '@ui/PrimaryButton';
 import Screen from '@ui/Screen';
 import { RootStackParamList } from '@app/navigation/types';
@@ -8,12 +8,17 @@ import { theme } from '@app/theme/colors';
 import { useGameStore } from '@game/useGameStore';
 import { FixedStepLoop } from '@game/loop/FixedStepLoop';
 import { LapSystem } from '@game/lap/LapSystem';
-import { getDefaultTrack } from '@game/track/Track';
+import { getDefaultTrack, TrackZone } from '@game/track/Track';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Game'>;
 
 const formatTime = (value: number | null) =>
   value === null ? '--' : `${value.toFixed(2)}s`;
+
+const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
+
+const CAR_WIDTH = 28;
+const CAR_HEIGHT = 16;
 
 const GameScreen = ({ navigation }: Props) => {
   const {
@@ -40,14 +45,20 @@ const GameScreen = ({ navigation }: Props) => {
 
   const loopRef = useRef<FixedStepLoop | null>(null);
   const lapSystemRef = useRef<LapSystem | null>(null);
+  const [trackSize, setTrackSize] = useState({ width: 0, height: 0 });
+
+  const track = useMemo(() => getDefaultTrack(), []);
+  const startLineZone = useMemo<TrackZone | undefined>(
+    () => track.getZonesByType('startLine')[0],
+    [track],
+  );
 
   useEffect(() => {
-    const track = getDefaultTrack();
     lapSystemRef.current = new LapSystem(track);
     return () => {
       lapSystemRef.current = null;
     };
-  }, []);
+  }, [track]);
 
   useEffect(() => {
     loopRef.current = new FixedStepLoop((dt) => {
@@ -69,13 +80,107 @@ const GameScreen = ({ navigation }: Props) => {
   }, [runActive]);
 
   const speed = useMemo(() => Math.hypot(carVelocity.x, carVelocity.y), [carVelocity]);
+  const speedKmh = speed * 3.6;
+
+  const carPixelPosition = useMemo(() => {
+    if (!trackSize.width || !trackSize.height) {
+      return {
+        x: trackSize.width / 2,
+        y: trackSize.height / 2,
+      };
+    }
+
+    return {
+      x: clamp01(carPosition.x / track.dimensions.width) * trackSize.width,
+      y: clamp01(carPosition.y / track.dimensions.height) * trackSize.height,
+    };
+  }, [
+    carPosition,
+    track.dimensions.height,
+    track.dimensions.width,
+    trackSize.height,
+    trackSize.width,
+  ]);
+
+  const startLineStyle = useMemo(() => {
+    if (!startLineZone || !trackSize.width || !trackSize.height) {
+      return {};
+    }
+
+    return {
+      left: (startLineZone.bounds.x / track.dimensions.width) * trackSize.width,
+      top: (startLineZone.bounds.y / track.dimensions.height) * trackSize.height,
+      width: (startLineZone.bounds.width / track.dimensions.width) * trackSize.width || 6,
+      height:
+        (startLineZone.bounds.height / track.dimensions.height) * trackSize.height || 40,
+    };
+  }, [
+    startLineZone,
+    track.dimensions.height,
+    track.dimensions.width,
+    trackSize.height,
+    trackSize.width,
+  ]);
 
   return (
     <Screen testID="GameScreen">
-      <Text style={styles.title}>Race Telemetry</Text>
-      <Text style={styles.subtitle}>
-        {runActive ? 'Lap running...' : 'Start a run to record telemetry.'}
-      </Text>
+      <View style={styles.header}>
+        <View>
+          <Text style={styles.title}>On Track</Text>
+          <Text style={styles.subtitle}>
+            {runActive ? 'Lap running...' : 'Start a run to record telemetry.'}
+          </Text>
+        </View>
+        <Pressable style={styles.pauseButton} onPress={() => navigation.navigate('Menu')}>
+          <Text style={styles.pauseLabel}>Pause</Text>
+        </Pressable>
+      </View>
+
+      <View style={styles.trackWrapper}>
+        <View
+          style={[
+            styles.trackSurface,
+            { aspectRatio: track.dimensions.width / track.dimensions.height },
+          ]}
+          onLayout={(event) =>
+            setTrackSize({
+              width: event.nativeEvent.layout.width,
+              height: event.nativeEvent.layout.height,
+            })
+          }
+        >
+          <TrackGrid />
+          <View style={[styles.startLine, startLineStyle]} />
+          <View
+            style={[
+              styles.car,
+              {
+                transform: [
+                  { translateX: carPixelPosition.x - CAR_WIDTH / 2 },
+                  { translateY: carPixelPosition.y - CAR_HEIGHT / 2 },
+                  { rotate: `${angle}deg` },
+                ],
+              },
+            ]}
+          />
+          <View style={styles.hudOverlay}>
+            <View style={styles.hudItem}>
+              <Text style={styles.hudValue}>{`${speedKmh.toFixed(0)} km/h`}</Text>
+              <Text style={styles.hudLabel}>Speed</Text>
+            </View>
+            <View style={styles.hudDivider} />
+            <View style={styles.hudItem}>
+              <Text style={styles.hudValue}>{`Lap ${lap.currentLap}`}</Text>
+              <Text style={styles.hudLabel}>Counter</Text>
+            </View>
+            <View style={styles.hudDivider} />
+            <View style={styles.hudItem}>
+              <Text style={styles.hudValue}>{formatTime(lap.bestLap)}</Text>
+              <Text style={styles.hudLabel}>Best</Text>
+            </View>
+          </View>
+        </View>
+      </View>
 
       <View style={styles.statGrid}>
         <StatCard
@@ -136,16 +241,115 @@ const LapStat = ({ label, value }: StatProps) => (
   </View>
 );
 
+const TrackGrid = () => {
+  const tiles = useMemo(() => Array.from({ length: 64 }), []);
+  return (
+    <View style={styles.grid}>
+      {tiles.map((_, index) => (
+        <View key={`tile-${index}`} style={styles.gridTile} />
+      ))}
+    </View>
+  );
+};
+
 const styles = StyleSheet.create({
+  header: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
   title: {
     fontSize: 32,
     fontWeight: '700',
     color: theme.textPrimary,
-    marginBottom: 8,
+    marginBottom: 6,
   },
   subtitle: {
     color: theme.textSecondary,
-    marginBottom: 24,
+  },
+  pauseButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 999,
+    backgroundColor: theme.surface,
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  pauseLabel: {
+    color: theme.textPrimary,
+    fontWeight: '600',
+  },
+  trackWrapper: {
+    width: '100%',
+    marginBottom: 20,
+  },
+  trackSurface: {
+    width: '100%',
+    borderRadius: 18,
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: '#1f2937',
+    backgroundColor: '#0f172a',
+  },
+  grid: {
+    position: 'absolute',
+    inset: 0,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  gridTile: {
+    width: '12.5%',
+    height: '12.5%',
+    borderWidth: 0.5,
+    borderColor: 'rgba(255,255,255,0.04)',
+  },
+  startLine: {
+    position: 'absolute',
+    backgroundColor: '#f97316',
+    opacity: 0.9,
+  },
+  car: {
+    position: 'absolute',
+    width: CAR_WIDTH,
+    height: CAR_HEIGHT,
+    backgroundColor: '#fbbf24',
+    borderRadius: 4,
+    shadowColor: '#000',
+    shadowOpacity: 0.35,
+    shadowRadius: 4,
+  },
+  hudOverlay: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: 'rgba(15, 23, 42, 0.85)',
+    borderWidth: 1,
+    borderColor: theme.border,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  hudItem: {
+    alignItems: 'flex-start',
+  },
+  hudValue: {
+    color: theme.textPrimary,
+    fontWeight: '700',
+  },
+  hudLabel: {
+    color: theme.textSecondary,
+    fontSize: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  hudDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: '#1f2937',
   },
   statGrid: {
     flexDirection: 'row',
