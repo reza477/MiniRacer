@@ -62,6 +62,7 @@ export class Track {
   }
 }
 
-const defaultTrack = new Track(defaultTrackData);
+const trackData = defaultTrackData as TrackData;
+const defaultTrack = new Track(trackData);
 
 export const getDefaultTrack = () => defaultTrack;

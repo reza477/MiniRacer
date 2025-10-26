@@ -10,6 +10,10 @@ import { useGameStore } from '@game/useGameStore';
 import { FixedStepLoop } from '@game/loop/FixedStepLoop';
 import { LapSystem } from '@game/lap/LapSystem';
 import { getDefaultTrack, TrackZone } from '@game/track/Track';
+import engineLoopSfx from '@assets/audio/engine.mp3';
+import { useShallow } from 'zustand/react/shallow';
+
+type GameStoreState = ReturnType<typeof useGameStore.getState>;
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Game'>;
 
@@ -18,8 +22,23 @@ const formatTime = (value: number | null) =>
 
 const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
 
+const MAX_SPEED = 220;
 const CAR_WIDTH = 28;
 const CAR_HEIGHT = 16;
+
+const selectGameScreenState = (state: GameStoreState) => ({
+  runActive: state.runActive,
+  carPosition: state.carPosition,
+  carVelocity: state.carVelocity,
+  angle: state.angle,
+  lap: state.lap,
+  settings: state.settings,
+  startRun: state.startRun,
+  finishRun: state.finishRun,
+  reset: state.reset,
+  update: state.update,
+  hydrateSettings: state.hydrateSettings,
+});
 
 const GameScreen = ({ navigation }: Props) => {
   const {
@@ -28,28 +47,17 @@ const GameScreen = ({ navigation }: Props) => {
     carVelocity,
     angle,
     lap,
+    settings,
     startRun,
     finishRun,
     reset,
     update,
-    settings,
     hydrateSettings,
-  } = useGameStore((state) => ({
-    runActive: state.runActive,
-    carPosition: state.carPosition,
-    carVelocity: state.carVelocity,
-    angle: state.angle,
-    lap: state.lap,
-    startRun: state.startRun,
-    finishRun: state.finishRun,
-    reset: state.reset,
-    update: state.update,
-    settings: state.settings,
-    hydrateSettings: state.hydrateSettings,
-  }));
+  } = useGameStore(useShallow(selectGameScreenState));
 
   const loopRef = useRef<FixedStepLoop | null>(null);
   const lapSystemRef = useRef<LapSystem | null>(null);
+  const engineSoundRef = useRef<Audio.Sound | null>(null);
   const [trackSize, setTrackSize] = useState({ width: 0, height: 0 });
 
   const track = useMemo(() => getDefaultTrack(), []);
@@ -89,13 +97,77 @@ const GameScreen = ({ navigation }: Props) => {
   }, [runActive]);
 
   useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: false,
+          staysActiveInBackground: false,
+          playsInSilentModeIOS: true,
+          shouldDuckAndroid: true,
+          playThroughEarpieceAndroid: false,
+        });
+        const { sound } = await Audio.Sound.createAsync(engineLoopSfx, {
+          isLooping: true,
+          shouldPlay: false,
+          volume: 0,
+        });
+        if (cancelled) {
+          await sound.unloadAsync();
+          return;
+        }
+        engineSoundRef.current = sound;
+      } catch (error) {
+        console.warn('[Audio] Failed to init engine', error);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      engineSoundRef.current?.unloadAsync();
+      engineSoundRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    const sound = engineSoundRef.current;
+    if (!sound) {
+      return;
+    }
+
+    if (runActive && settings.soundEnabled) {
+      sound.playAsync().catch((error) => console.warn('[Audio] play failed', error));
+    } else {
+      sound.pauseAsync().catch((error) => console.warn('[Audio] pause failed', error));
+    }
+  }, [runActive, settings.soundEnabled]);
+
+  const speed = useMemo(() => Math.hypot(carVelocity.x, carVelocity.y), [carVelocity]);
+  const speedKmh = speed * 3.6;
+
+  useEffect(() => {
     Audio.setIsEnabledAsync(settings.soundEnabled).catch((error) =>
       console.warn('[Audio] Failed to toggle sound', error),
     );
   }, [settings.soundEnabled]);
 
-  const speed = useMemo(() => Math.hypot(carVelocity.x, carVelocity.y), [carVelocity]);
-  const speedKmh = speed * 3.6;
+  useEffect(() => {
+    const sound = engineSoundRef.current;
+    if (!sound) {
+      return;
+    }
+
+    const normalized = Math.min(speed / MAX_SPEED, 1);
+    const pitch = 0.8 + normalized * 0.5;
+    const volume = settings.soundEnabled ? 0.25 + normalized * 0.6 : 0;
+
+    sound
+      .setRateAsync(pitch, true)
+      .catch((error) => console.warn('[Audio] rate set failed', error));
+    sound
+      .setVolumeAsync(volume)
+      .catch((error) => console.warn('[Audio] volume set failed', error));
+  }, [settings.soundEnabled, speed]);
 
   const carPixelPosition = useMemo(() => {
     if (!trackSize.width || !trackSize.height) {
@@ -250,19 +322,14 @@ const GameScreen = ({ navigation }: Props) => {
   );
 };
 
-type StatProps = {
-  label: string;
-  value: string;
-};
-
-const StatCard = ({ label, value }: StatProps) => (
+const StatCard = ({ label, value }: { label: string; value: string }) => (
   <View style={styles.statCard}>
     <Text style={styles.statLabel}>{label}</Text>
     <Text style={styles.statValue}>{value}</Text>
   </View>
 );
 
-const LapStat = ({ label, value }: StatProps) => (
+const LapStat = ({ label, value }: { label: string; value: string }) => (
   <View style={styles.lapStat}>
     <Text style={styles.lapStatLabel}>{label}</Text>
     <Text style={styles.lapStatValue}>{value}</Text>

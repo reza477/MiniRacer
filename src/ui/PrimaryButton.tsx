@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import {
   Pressable,
   StyleSheet,
@@ -8,6 +8,8 @@ import {
   GestureResponderEvent,
 } from 'react-native';
 import { theme } from '@app/theme/colors';
+import { useGameStore } from '@game/useGameStore';
+import { playClick } from '@game/audio/soundManager';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost';
 
@@ -24,9 +26,21 @@ const PrimaryButton = ({
   variant = 'primary',
   style,
 }: PrimaryButtonProps) => {
+  const soundEnabled = useGameStore((state) => state.settings.soundEnabled);
+
+  const handlePress = useCallback(
+    (event: GestureResponderEvent) => {
+      playClick(soundEnabled).catch((error) =>
+        console.warn('[Audio] click failed', error),
+      );
+      onPress?.(event);
+    },
+    [onPress, soundEnabled],
+  );
+
   return (
     <Pressable
-      onPress={onPress}
+      onPress={handlePress}
       style={({ pressed }) => [
         styles.base,
         styles[variant],
