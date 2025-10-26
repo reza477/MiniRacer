@@ -6,88 +6,57 @@ import Screen from '@ui/Screen';
 import PrimaryButton from '@ui/PrimaryButton';
 import { theme } from '@app/theme/colors';
 
-const featureCards = [
-  { title: 'Sprint Runs', subtitle: 'Beat your best time and earn coins.' },
-  { title: 'Garage Lab', subtitle: 'Tune your micro racer for max boost.' },
-  { title: 'Photo Mode', subtitle: 'Share cinematic captures with crew.' },
-];
-
 type Props = NativeStackScreenProps<RootStackParamList, 'Menu'>;
 
 const MenuScreen = ({ navigation }: Props) => {
+  const handleQuit = () => {
+    console.log('[MiniRacer] Quit tapped');
+  };
+
   return (
-    <Screen testID="MenuScreen">
-      <Text style={styles.kicker}>Arcade micro racer</Text>
-      <Text style={styles.title}>MiniRacer</Text>
-      <Text style={styles.subtitle}>
-        Build momentum, chase neon trails, and climb the weekly podium.
-      </Text>
+    <Screen style={styles.container} testID="MenuScreen">
+      <View style={styles.content}>
+        <Text style={styles.title}>MiniRacer</Text>
+        <Text style={styles.subtitle}>Pick an option to get started.</Text>
 
-      <View style={styles.buttonRow}>
-        <PrimaryButton label="Start Run" onPress={() => navigation.navigate('Game')} />
-        <PrimaryButton
-          label="Settings"
-          variant="secondary"
-          onPress={() => navigation.navigate('Settings')}
-        />
-      </View>
-
-      <View style={styles.cardGrid}>
-        {featureCards.map((card) => (
-          <View key={card.title} style={styles.card}>
-            <Text style={styles.cardTitle}>{card.title}</Text>
-            <Text style={styles.cardCopy}>{card.subtitle}</Text>
-          </View>
-        ))}
+        <View style={styles.buttonGroup}>
+          <PrimaryButton label="Play" onPress={() => navigation.navigate('Game')} />
+          <PrimaryButton
+            label="Settings"
+            variant="secondary"
+            onPress={() => navigation.navigate('Settings')}
+          />
+          <PrimaryButton label="Quit" variant="ghost" onPress={handleQuit} />
+        </View>
       </View>
     </Screen>
   );
 };
 
 const styles = StyleSheet.create({
-  kicker: {
-    color: theme.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 2,
-    marginBottom: 8,
+  container: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  content: {
+    width: '100%',
+    maxWidth: 320,
+    alignItems: 'center',
+    gap: 16,
   },
   title: {
-    fontSize: 40,
+    fontSize: 38,
     fontWeight: '800',
-    marginBottom: 12,
     color: theme.textPrimary,
   },
   subtitle: {
     color: theme.textSecondary,
-    marginBottom: 24,
-    fontSize: 16,
-    lineHeight: 22,
+    textAlign: 'center',
   },
-  buttonRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+  buttonGroup: {
+    width: '100%',
     gap: 12,
-    marginBottom: 24,
-  },
-  cardGrid: {
-    gap: 14,
-  },
-  card: {
-    padding: 18,
-    borderRadius: 16,
-    backgroundColor: theme.surface,
-    borderWidth: 1,
-    borderColor: theme.border,
-  },
-  cardTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    marginBottom: 6,
-    color: theme.textPrimary,
-  },
-  cardCopy: {
-    color: theme.textSecondary,
-    lineHeight: 20,
   },
 });
 

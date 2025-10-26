@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { StyleSheet, Text, View } from 'react-native';
 import PrimaryButton from '@ui/PrimaryButton';
@@ -6,36 +6,71 @@ import Screen from '@ui/Screen';
 import { RootStackParamList } from '@app/navigation/types';
 import { theme } from '@app/theme/colors';
 import { useGameStore } from '@game/useGameStore';
-
-const vehicleStats = [
-  { label: 'Energy', value: 82 },
-  { label: 'Traction', value: 68 },
-  { label: 'Aero', value: 91 },
-];
+import { FixedStepLoop } from '@game/loop/FixedStepLoop';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Game'>;
 
+const formatTime = (value: number | null) =>
+  value === null ? '--' : `${value.toFixed(2)}s`;
+
 const GameScreen = ({ navigation }: Props) => {
-  const { runActive, coins, topSpeed, startRun, finishRun, reset } = useGameStore();
+  const {
+    runActive,
+    carPosition,
+    carVelocity,
+    angle,
+    lap,
+    startRun,
+    finishRun,
+    reset,
+    update,
+  } = useGameStore((state) => ({
+    runActive: state.runActive,
+    carPosition: state.carPosition,
+    carVelocity: state.carVelocity,
+    angle: state.angle,
+    lap: state.lap,
+    startRun: state.startRun,
+    finishRun: state.finishRun,
+    reset: state.reset,
+    update: state.update,
+  }));
+
+  const loopRef = useRef<FixedStepLoop | null>(null);
+
+  useEffect(() => {
+    loopRef.current = new FixedStepLoop(update);
+    return () => {
+      loopRef.current?.stop();
+      loopRef.current = null;
+    };
+  }, [update]);
+
+  useEffect(() => {
+    if (runActive) {
+      loopRef.current?.start();
+    } else {
+      loopRef.current?.stop();
+    }
+  }, [runActive]);
+
+  const speed = useMemo(() => Math.hypot(carVelocity.x, carVelocity.y), [carVelocity]);
 
   return (
     <Screen testID="GameScreen">
-      <Text style={styles.title}>Weekly Sprint</Text>
+      <Text style={styles.title}>Race Telemetry</Text>
       <Text style={styles.subtitle}>
-        {runActive
-          ? 'Hold the line and chase clean apexes.'
-          : 'Tap start to begin your warmup.'}
+        {runActive ? 'Lap running...' : 'Start a run to record telemetry.'}
       </Text>
 
-      <View style={styles.statRow}>
-        <View style={styles.statCard}>
-          <Text style={styles.statLabel}>Coins</Text>
-          <Text style={styles.statValue}>{coins}</Text>
-        </View>
-        <View style={styles.statCard}>
-          <Text style={styles.statLabel}>Top speed</Text>
-          <Text style={styles.statValue}>{topSpeed} km/h</Text>
-        </View>
+      <View style={styles.statGrid}>
+        <StatCard
+          label="Position"
+          value={`${carPosition.x.toFixed(1)}, ${carPosition.y.toFixed(1)}`}
+        />
+        <StatCard label="Speed" value={`${speed.toFixed(1)} u/s`} />
+        <StatCard label="Angle" value={`${angle.toFixed(0)}°`} />
+        <StatCard label="Lap Time" value={formatTime(lap.currentTime)} />
       </View>
 
       <View style={styles.buttonColumn}>
@@ -54,19 +89,37 @@ const GameScreen = ({ navigation }: Props) => {
         )}
       </View>
 
-      <View style={styles.metaBlock}>
-        {vehicleStats.map((item) => (
-          <View key={item.label} style={styles.metaCard}>
-            <Text style={styles.metaLabel}>{item.label}</Text>
-            <View style={styles.progressTrack}>
-              <View style={[styles.progressBar, { width: `${item.value}%` }]} />
-            </View>
-          </View>
-        ))}
+      <View style={styles.lapCard}>
+        <Text style={styles.lapTitle}>Lap Summary</Text>
+        <View style={styles.lapRow}>
+          <LapStat label="Last" value={formatTime(lap.lastTime)} />
+          <LapStat label="Best" value={formatTime(lap.bestTime)} />
+          <LapStat label="Distance" value={`${lap.distance.toFixed(1)} u`} />
+          <LapStat label="Laps" value={lap.lapCount.toString()} />
+        </View>
       </View>
     </Screen>
   );
 };
+
+type StatProps = {
+  label: string;
+  value: string;
+};
+
+const StatCard = ({ label, value }: StatProps) => (
+  <View style={styles.statCard}>
+    <Text style={styles.statLabel}>{label}</Text>
+    <Text style={styles.statValue}>{value}</Text>
+  </View>
+);
+
+const LapStat = ({ label, value }: StatProps) => (
+  <View style={styles.lapStat}>
+    <Text style={styles.lapStatLabel}>{label}</Text>
+    <Text style={styles.lapStatValue}>{value}</Text>
+  </View>
+);
 
 const styles = StyleSheet.create({
   title: {
@@ -79,13 +132,15 @@ const styles = StyleSheet.create({
     color: theme.textSecondary,
     marginBottom: 24,
   },
-  statRow: {
+  statGrid: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 12,
     marginBottom: 24,
   },
   statCard: {
-    flex: 1,
+    flexBasis: '48%',
+    flexGrow: 1,
     padding: 18,
     borderRadius: 16,
     backgroundColor: theme.surface,
@@ -100,34 +155,44 @@ const styles = StyleSheet.create({
   },
   statValue: {
     color: theme.textPrimary,
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '700',
   },
   buttonColumn: {
     gap: 12,
     marginBottom: 24,
   },
-  metaBlock: {
-    gap: 14,
-  },
-  metaCard: {
-    padding: 16,
+  lapCard: {
+    padding: 18,
+    borderRadius: 16,
     backgroundColor: theme.elevated,
-    borderRadius: 14,
+    borderColor: theme.border,
+    borderWidth: 1,
   },
-  metaLabel: {
+  lapTitle: {
+    color: theme.textPrimary,
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 12,
+  },
+  lapRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  lapStat: {
+    flexBasis: '45%',
+  },
+  lapStatLabel: {
     color: theme.textSecondary,
-    marginBottom: 10,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 4,
   },
-  progressTrack: {
-    height: 8,
-    borderRadius: 999,
-    backgroundColor: '#1f2937',
-  },
-  progressBar: {
-    height: '100%',
-    borderRadius: 999,
-    backgroundColor: theme.accent,
+  lapStatValue: {
+    color: theme.textPrimary,
+    fontSize: 18,
+    fontWeight: '700',
   },
 });
 
