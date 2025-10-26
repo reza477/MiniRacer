@@ -9,7 +9,10 @@ type LapData = {
   currentTime: number;
   lastTime: number | null;
   bestTime: number | null;
+  bestLap: number | null;
   lapCount: number;
+  lapTimes: number[];
+  currentLap: number;
   distance: number;
 };
 
@@ -23,6 +26,8 @@ type GameState = {
   finishRun: () => void;
   reset: () => void;
   update: (dt: number) => void;
+  completeLap: (lapTime: number) => void;
+  hydrateBestLap: (bestLap: number) => void;
   settings: {
     inputMode: 'touchZones' | 'joystick';
   };
@@ -45,7 +50,10 @@ const initialState: Pick<
     currentTime: 0,
     lastTime: null,
     bestTime: null,
+    bestLap: null,
     lapCount: 0,
+    lapTimes: [],
+    currentLap: 1,
     distance: 0,
   },
   settings: {
@@ -75,37 +83,63 @@ export const useGameStore = create<GameState>((set) => ({
         ...state.lap,
         currentTime: 0,
         distance: 0,
+        lapTimes: [],
+        lapCount: 0,
+        currentLap: 1,
+        lastTime: null,
       },
     })),
   finishRun: () =>
-    set((state) => {
-      if (!state.runActive) {
-        return state;
-      }
-
-      const lastTime = state.lap.currentTime;
-      const bestTime =
-        state.lap.bestTime === null ? lastTime : Math.min(state.lap.bestTime, lastTime);
-
-      return {
-        ...state,
-        runActive: false,
-        lap: {
-          ...state.lap,
-          lastTime,
-          bestTime,
-          lapCount: state.lap.lapCount + 1,
-          currentTime: 0,
-        },
-      };
-    }),
-  reset: () => set(() => ({ ...initialState })),
+    set((state) => ({
+      ...state,
+      runActive: false,
+    })),
+  reset: () =>
+    set((state) => ({
+      ...initialState,
+      settings: state.settings,
+      lap: {
+        ...initialState.lap,
+        bestLap: state.lap.bestLap,
+        bestTime: state.lap.bestLap,
+      },
+    })),
   setInputMode: (mode) =>
     set((state) => ({
       ...state,
       settings: {
         ...state.settings,
         inputMode: mode,
+      },
+    })),
+  completeLap: (lapTime) =>
+    set((state) => {
+      const lapTimes = [...state.lap.lapTimes, lapTime];
+      const bestLap =
+        state.lap.bestLap === null ? lapTime : Math.min(state.lap.bestLap, lapTime);
+
+      return {
+        ...state,
+        lap: {
+          ...state.lap,
+          lapTimes,
+          lapCount: lapTimes.length,
+          lastTime: lapTime,
+          bestTime: bestLap,
+          bestLap,
+          currentLap: state.lap.currentLap + 1,
+          currentTime: 0,
+          distance: 0,
+        },
+      };
+    }),
+  hydrateBestLap: (bestLap) =>
+    set((state) => ({
+      ...state,
+      lap: {
+        ...state.lap,
+        bestLap,
+        bestTime: bestLap,
       },
     })),
   update: (dt) =>

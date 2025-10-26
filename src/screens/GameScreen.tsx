@@ -7,6 +7,8 @@ import { RootStackParamList } from '@app/navigation/types';
 import { theme } from '@app/theme/colors';
 import { useGameStore } from '@game/useGameStore';
 import { FixedStepLoop } from '@game/loop/FixedStepLoop';
+import { LapSystem } from '@game/lap/LapSystem';
+import { getDefaultTrack } from '@game/track/Track';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Game'>;
 
@@ -37,9 +39,21 @@ const GameScreen = ({ navigation }: Props) => {
   }));
 
   const loopRef = useRef<FixedStepLoop | null>(null);
+  const lapSystemRef = useRef<LapSystem | null>(null);
 
   useEffect(() => {
-    loopRef.current = new FixedStepLoop(update);
+    const track = getDefaultTrack();
+    lapSystemRef.current = new LapSystem(track);
+    return () => {
+      lapSystemRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    loopRef.current = new FixedStepLoop((dt) => {
+      update(dt);
+      lapSystemRef.current?.update();
+    });
     return () => {
       loopRef.current?.stop();
       loopRef.current = null;
@@ -93,9 +107,10 @@ const GameScreen = ({ navigation }: Props) => {
         <Text style={styles.lapTitle}>Lap Summary</Text>
         <View style={styles.lapRow}>
           <LapStat label="Last" value={formatTime(lap.lastTime)} />
-          <LapStat label="Best" value={formatTime(lap.bestTime)} />
+          <LapStat label="Best" value={formatTime(lap.bestLap)} />
+          <LapStat label="Current Lap" value={lap.currentLap.toString()} />
+          <LapStat label="Total Laps" value={lap.lapCount.toString()} />
           <LapStat label="Distance" value={`${lap.distance.toFixed(1)} u`} />
-          <LapStat label="Laps" value={lap.lapCount.toString()} />
         </View>
       </View>
     </Screen>
