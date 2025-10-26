@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Audio } from 'expo-av';
 import PrimaryButton from '@ui/PrimaryButton';
 import Screen from '@ui/Screen';
 import { RootStackParamList } from '@app/navigation/types';
@@ -31,6 +32,8 @@ const GameScreen = ({ navigation }: Props) => {
     finishRun,
     reset,
     update,
+    settings,
+    hydrateSettings,
   } = useGameStore((state) => ({
     runActive: state.runActive,
     carPosition: state.carPosition,
@@ -41,6 +44,8 @@ const GameScreen = ({ navigation }: Props) => {
     finishRun: state.finishRun,
     reset: state.reset,
     update: state.update,
+    settings: state.settings,
+    hydrateSettings: state.hydrateSettings,
   }));
 
   const loopRef = useRef<FixedStepLoop | null>(null);
@@ -61,6 +66,10 @@ const GameScreen = ({ navigation }: Props) => {
   }, [track]);
 
   useEffect(() => {
+    hydrateSettings();
+  }, [hydrateSettings]);
+
+  useEffect(() => {
     loopRef.current = new FixedStepLoop((dt) => {
       update(dt);
       lapSystemRef.current?.update();
@@ -78,6 +87,12 @@ const GameScreen = ({ navigation }: Props) => {
       loopRef.current?.stop();
     }
   }, [runActive]);
+
+  useEffect(() => {
+    Audio.setIsEnabledAsync(settings.soundEnabled).catch((error) =>
+      console.warn('[Audio] Failed to toggle sound', error),
+    );
+  }, [settings.soundEnabled]);
 
   const speed = useMemo(() => Math.hypot(carVelocity.x, carVelocity.y), [carVelocity]);
   const speedKmh = speed * 3.6;
@@ -121,6 +136,9 @@ const GameScreen = ({ navigation }: Props) => {
     trackSize.height,
     trackSize.width,
   ]);
+
+  const controlLabel = settings.inputMode === 'touchZones' ? 'Touch Zones' : 'Joystick';
+  const soundLabel = settings.soundEnabled ? 'Sound On' : 'Muted';
 
   return (
     <Screen testID="GameScreen">
@@ -177,6 +195,16 @@ const GameScreen = ({ navigation }: Props) => {
             <View style={styles.hudItem}>
               <Text style={styles.hudValue}>{formatTime(lap.bestLap)}</Text>
               <Text style={styles.hudLabel}>Best</Text>
+            </View>
+            <View style={styles.hudDivider} />
+            <View style={styles.hudItem}>
+              <Text style={styles.hudValue}>{controlLabel}</Text>
+              <Text style={styles.hudLabel}>Control</Text>
+            </View>
+            <View style={styles.hudDivider} />
+            <View style={styles.hudItem}>
+              <Text style={styles.hudValue}>{soundLabel}</Text>
+              <Text style={styles.hudLabel}>Audio</Text>
             </View>
           </View>
         </View>

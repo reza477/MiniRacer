@@ -1,10 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useGameStore } from '@game/useGameStore';
 import { Track, TrackZone } from '@game/track/Track';
+import { STORAGE_KEYS } from '@game/storageKeys';
 
 type Vector2 = { x: number; y: number };
 
-const STORAGE_KEY = 'MiniRacer:bestLap';
 const MIN_LAP_TIME = 2; // seconds
 
 type LapSystemOptions = {
@@ -29,7 +29,7 @@ export class LapSystem {
 
   constructor(track: Track, options: LapSystemOptions = {}) {
     this.track = track;
-    this.storageKey = options.storageKey ?? STORAGE_KEY;
+    this.storageKey = options.storageKey ?? STORAGE_KEYS.bestLap;
     this.forwardDirection = options.forwardDirection ?? 1;
     this.minLapTime = options.minLapTime ?? MIN_LAP_TIME;
     this.startLineZone = this.track.getZonesByType('startLine')[0];

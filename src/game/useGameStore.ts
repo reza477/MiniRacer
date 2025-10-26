@@ -1,4 +1,6 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
+import { STORAGE_KEYS } from '@game/storageKeys';
 
 type Vector2 = {
   x: number;
@@ -16,6 +18,13 @@ type LapData = {
   distance: number;
 };
 
+type InputMode = 'touchZones' | 'joystick';
+
+type SettingsState = {
+  inputMode: InputMode;
+  soundEnabled: boolean;
+};
+
 type GameState = {
   runActive: boolean;
   carPosition: Vector2;
@@ -28,16 +37,22 @@ type GameState = {
   update: (dt: number) => void;
   completeLap: (lapTime: number) => void;
   hydrateBestLap: (bestLap: number) => void;
-  settings: {
-    inputMode: 'touchZones' | 'joystick';
-  };
-  setInputMode: (mode: 'touchZones' | 'joystick') => void;
+  settings: SettingsState;
+  hydrateSettings: () => Promise<void>;
+  setInputMode: (mode: InputMode) => void;
+  setSoundEnabled: (value: boolean) => void;
+  resetBestLap: () => void;
 };
 
 const defaultCarState = {
   carPosition: { x: 0, y: 0 },
   carVelocity: { x: 0, y: 0 },
   angle: 0,
+};
+
+const defaultSettings: SettingsState = {
+  inputMode: 'touchZones',
+  soundEnabled: true,
 };
 
 const initialState: Pick<
@@ -56,9 +71,15 @@ const initialState: Pick<
     currentLap: 1,
     distance: 0,
   },
-  settings: {
-    inputMode: 'touchZones',
-  },
+  settings: defaultSettings,
+};
+
+const persistSettings = async (settings: SettingsState) => {
+  try {
+    await AsyncStorage.setItem(STORAGE_KEYS.settings, JSON.stringify(settings));
+  } catch (error) {
+    console.warn('[Settings] Failed to persist settings', error);
+  }
 };
 
 const clamp = (value: number, min: number, max: number) =>
@@ -105,13 +126,63 @@ export const useGameStore = create<GameState>((set) => ({
       },
     })),
   setInputMode: (mode) =>
-    set((state) => ({
-      ...state,
-      settings: {
+    set((state) => {
+      const nextSettings = {
         ...state.settings,
         inputMode: mode,
+      };
+      persistSettings(nextSettings);
+      return {
+        ...state,
+        settings: nextSettings,
+      };
+    }),
+  setSoundEnabled: (value) =>
+    set((state) => {
+      const nextSettings = {
+        ...state.settings,
+        soundEnabled: value,
+      };
+      persistSettings(nextSettings);
+      return {
+        ...state,
+        settings: nextSettings,
+      };
+    }),
+  hydrateSettings: async () => {
+    try {
+      const stored = await AsyncStorage.getItem(STORAGE_KEYS.settings);
+      if (!stored) {
+        return;
+      }
+
+      const parsed = JSON.parse(stored) as Partial<SettingsState>;
+      set((state) => ({
+        ...state,
+        settings: {
+          ...state.settings,
+          ...parsed,
+        },
+      }));
+    } catch (error) {
+      console.warn('[Settings] Failed to hydrate settings', error);
+    }
+  },
+  resetBestLap: () => {
+    AsyncStorage.removeItem(STORAGE_KEYS.bestLap).catch((error) =>
+      console.warn('[Lap] Failed to reset best lap', error),
+    );
+    set((state) => ({
+      ...state,
+      lap: {
+        ...state.lap,
+        bestLap: null,
+        bestTime: null,
+        lastTime: null,
+        lapTimes: [],
       },
-    })),
+    }));
+  },
   completeLap: (lapTime) =>
     set((state) => {
       const lapTimes = [...state.lap.lapTimes, lapTime];
